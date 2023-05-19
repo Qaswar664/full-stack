@@ -3,6 +3,8 @@ const cors = require('cors')
 require('./db/config')
 const User = require('./db/User')
 const Product = require('./db/Product')
+const bcrypt = require('bcrypt');
+
  
 const app = express()
 
@@ -18,17 +20,38 @@ app.post('/register', async (req, resp) => {
 })
 
 app.post('/login', async (req, resp) => {
-    if (req.body.password && req.body.email) {
-        let user = await User.findOne(req.body).select('-password')
-        if (user) {
-            resp.send(user)
-        } else {
-            resp.send({ result: 'No User Found' })
-        }
-    } else {
-        resp.send({ result: 'No User Found' })
+  const { email, password } = req.body;
+
+  try {
+    // Find the user by email
+    const user = await User.findOne({ email });
+
+    // If no user found
+    if (!user) {
+      return resp.status(404).json({ error: 'User not found' });
     }
-})
+
+    // Compare the provided password with the hashed password stored in the database
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    // If the passwords do not match
+    if (!isPasswordValid) {
+      return resp.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate an authentication token
+    const token = jwt.sign({ userId: user._id }, 'your-secret-key', {
+      expiresIn: '1h',
+    });
+
+    // Send the authentication token as the response
+    resp.json({ token });
+  } catch (error) {
+    console.error('Error during login:', error);
+    resp.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 app.post('/add-product', async (req,resp)=>{
       let product = new Product(req.body)
